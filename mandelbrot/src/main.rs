@@ -1,5 +1,3 @@
-extern crate core;
-
 use num::Complex;
 
 fn calculate_mandelbrot(

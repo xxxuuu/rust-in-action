@@ -2,7 +2,6 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::time::Instant;
 use graphics::{clear, rectangle};
 use graphics::math::{add, mul_scalar, Vec2d};
-use graphics::types::Width;
 use piston_window::{PistonWindow, WindowSettings};
 use rand::rngs::ThreadRng;
 use rand::{Rng, thread_rng};
