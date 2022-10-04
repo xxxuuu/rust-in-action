@@ -82,12 +82,16 @@ impl ActionKV {
     pub fn get(&mut self, key: &ByteStr) -> io::Result<Option<ByteString>> {
         return match self.index.get(key) {
             Some(position) => {
-                let mut f = BufReader::new(&mut self.f);
-                f.seek(SeekFrom::Start(*position))?;
-                Ok(Some(ActionKV::process_record(&mut f)?.value))
+                Ok(Some(self.get_at(*position)?.value))
             }
             None => Ok(None),
         };
+    }
+
+    pub fn get_at(&mut self, position: u64) -> io::Result<KeyValuePair> {
+        let mut f = BufReader::new(&mut self.f);
+        f.seek(SeekFrom::Start(position))?;
+        Ok(ActionKV::process_record(&mut f)?)
     }
 
     pub fn insert(&mut self, key: &ByteStr, value: &ByteStr) -> io::Result<()> {
