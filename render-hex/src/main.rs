@@ -1,6 +1,8 @@
-use std::env;
+use crossbeam::unbounded;
+use std::{env, thread};
 use svg::Document;
 
+use crate::Operation::Noop;
 use svg::node::element::path::{Command, Data, Position};
 use svg::node::element::{Path, Rectangle};
 
@@ -11,6 +13,11 @@ const STROKE_WIDTH: isize = 5;
 
 const HOME_X: isize = HEIGHT / 2;
 const HOME_Y: isize = WIDTH / 2;
+
+enum Work {
+    Task((usize, u8)),
+    Finished,
+}
 
 #[derive(Debug, Clone, Copy)]
 enum Orientation {
@@ -97,21 +104,52 @@ impl Artist {
 }
 
 fn parse(input: &str) -> Vec<Operation> {
-    let mut steps = Vec::<Operation>::new();
-    for byte in input.bytes() {
-        let step = match byte {
-            b'0' => Operation::Home,
-            b'1'..=b'9' => {
-                let distance = (byte - 0x30) as isize;
-                Operation::Forward(distance * (HEIGHT / 10))
-            }
-            b'a' | b'b' | b'c' => Operation::TurnLeft,
-            b'd' | b'e' | b'f' => Operation::TurnRight,
-            _ => Operation::Noop(byte),
-        };
-        steps.push(step);
+    let n_threads = 2;
+    let (todo_tx, todo_rx) = unbounded();
+    let (results_tx, results_rx) = unbounded();
+    let mut n_bytes = 0;
+    for (i, byte) in input.bytes().enumerate() {
+        todo_tx.send(Work::Task((i, byte))).unwrap();
+        n_bytes += 1;
     }
-    steps
+
+    for _ in 0..n_threads {
+        todo_tx.send(Work::Finished).unwrap();
+    }
+
+    for _ in 0..n_bytes {
+        let todo = todo_rx.clone();
+        let results = results_tx.clone();
+        thread::spawn(move || loop {
+            let task = todo.recv();
+            let result = match task {
+                Err(_) => break,
+                Ok(Work::Finished) => break,
+                Ok(Work::Task((i, byte))) => (i, parse_byte(byte)),
+            };
+            results.send(result).unwrap();
+        });
+    }
+
+    let mut ops = vec![Noop(0); n_bytes];
+    for _ in 0..n_bytes {
+        let (i, op) = results_rx.recv().unwrap();
+        ops[i] = op;
+    }
+    ops
+}
+
+fn parse_byte(byte: u8) -> Operation {
+    match byte {
+        b'0' => Operation::Home,
+        b'1'..=b'9' => {
+            let distance = (byte - 0x30) as isize;
+            Operation::Forward(distance * (HEIGHT / 10))
+        }
+        b'a' | b'b' | b'c' => Operation::TurnLeft,
+        b'd' | b'e' | b'f' => Operation::TurnRight,
+        _ => Operation::Noop(byte),
+    }
 }
 
 fn convert(operations: &Vec<Operation>) -> Vec<Command> {
